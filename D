@@ -579,6 +579,14 @@ function Z8r()
     gg.toast("🔄 All hacks restored to original values.")
 end
 
+
+function HowToUse()
+gg.alert('Active Auto Win in {Road, Japan, Italy}, Active after start race, dont go to start Point\nClick in start and Active the cheat then Teleport in (Back To Road) then hit npc)'
+
+end
+
+
+
 -- ---------- Main Rally Menu ----------
 function M6u()
     local options = {
@@ -592,6 +600,7 @@ function M6u()
         " Bypass Reward",        
         " Clear List",
         " Restore All Hacks",
+        " How To Use ",
         "exit"
     }
     local choice = gg.choice(options, nil, title)
@@ -609,7 +618,8 @@ function M6u()
     elseif choice == 8 then BypassReward()
     elseif choice == 9 then C4l()
     elseif choice == 10 then Z8r()
-    elseif choice == 11 then os.exit()
+    elseif choice == 11 then HowToUse()
+    elseif choice == 12 then os.exit()
     end
 end
 
