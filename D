@@ -1,1 +1,610 @@
 
+local d_s = "-> " 
+
+function classValue(Name, Offset, Type)
+  gg.setVisible(false)
+  local offForField = 0x8
+  if gg.getTargetInfo().x64 then offForField = 0x10 end 
+  local metadata = gg.getRangesList('global-metadata.dat')
+  gg.clearResults()
+  gg.setRanges(-1)
+  gg.searchNumber(':'..Name, 4, false, gg.SIGN_EQUAL, metadata[1].start, metadata[1]['end'])
+  local vr = gg.getResults(gg.getResultsCount())
+  local count = #vr/#Name
+  local t={}
+  for i=1, count do
+    table.insert(t, vr[(i*#Name)-(#Name-1)])
+  end
+  gg.loadResults(t)
+  gg.setRanges(32)
+  gg.searchPointer(0)
+  local vr = gg.getResults(gg.getResultsCount())
+  for i, v in ipairs(vr) do
+    v.address = v.address-offForField
+  end
+  gg.setRanges(32)
+  gg.loadResults(vr)
+  gg.searchPointer(0)
+  if Offset and Offset~=0 then
+    local vr = gg.getResults(gg.getResultsCount())
+    for i, v in ipairs(vr) do
+      v.address=v.address+Offset
+      v.flags=Type
+    end
+    gg.loadResults(vr)
+  end
+end
+
+
+
+
+
+local IsCarOffRoad = 0x3727954
+local get_Penalty = 0x37268D8
+local get_MissedCheckpoints = 0x37268E0
+local AddPenalty = 0x3726F2C
+--// public class RallyCar : MonoBehaviour, IRaceCar
+--/ private bool IsCarOffRoad(out float distance) { }
+--/ public float get_Penalty() { }
+--/ public int get_MissedCheckpoints() { }
+--/ public void AddPenalty(float amount, PenaltyType type = 6) { }
+
+
+
+
+local gg = gg
+local title = " RALLY HACKS "
+
+-- Global saved table (stores original values)
+local V7q = {}
+
+-- ---------- Helper functions ----------
+local function B9x()
+    local ranges = gg.getRangesList("libil2cpp.so")
+    if not ranges or #ranges < 2 then
+        return nil
+    end
+    return ranges[2].start
+end
+
+-- Save original value before modifying
+local function S2k(A, F)
+    local current = gg.getValues({{address = A, flags = F}})
+    if current and #current > 0 then
+        V7q[A] = {
+            flags = F,
+            value = current[1].value
+        }
+    end
+end
+
+-- ---------- Rally functions ----------
+
+function F4n()  -- Hook Time
+    gg.setVisible(false)
+    gg.clearResults()
+    gg.setRanges(gg.REGION_ANONYMOUS)
+    gg.searchNumber("10", gg.TYPE_FLOAT)
+    local results = gg.getResults(2000)
+
+    local addr_refs = {}
+    local check_plus4 = {}
+    for _, r in ipairs(results) do
+        check_plus4[#check_plus4 + 1] = { address = r.address + 0x4, flags = gg.TYPE_FLOAT }
+        addr_refs[#addr_refs + 1] = r.address
+    end
+    local values_plus4 = gg.getValues(check_plus4)
+
+    local candidates = {}
+    local candidate_refs = {}
+    for i, v in ipairs(values_plus4) do
+        if v.value == 5 then
+            candidates[#candidates + 1] = { address = addr_refs[i] + 0x8, flags = gg.TYPE_FLOAT }
+            candidate_refs[#candidate_refs + 1] = addr_refs[i]
+        end
+    end
+
+    if #candidates == 0 then
+        gg.toast("Error: no candidates found (Hook Time)")
+        return
+    end
+
+    local values_plus8 = gg.getValues(candidates)
+
+    local edits = {}
+    for i, v in ipairs(values_plus8) do
+        if v.value == 10 then
+            local target = candidate_refs[i] + 0x5C
+            S2k(target, gg.TYPE_FLOAT)
+            edits[#edits + 1] = {
+                address = target,
+                flags = gg.TYPE_FLOAT,
+                value = 0,
+                freeze = true
+            }
+        end
+    end
+
+    if #edits == 0 then
+        gg.toast("Error: could not apply edits (Hook Time)")
+        return
+    end
+
+    gg.addListItems(edits)
+    gg.clearResults()
+    gg.toast("⏱️ Time Frozen")
+    gg.setVisible(false)
+end
+
+function P8r()  -- Hook All Penalties
+    gg.setVisible(false)
+    local B = B9x()
+    if not B then
+        gg.toast("libil2cpp.so not found")
+        return
+    end
+
+    local function Q1z(A, V)
+        S2k(A, gg.TYPE_DWORD)
+        gg.setValues({{address = A, flags = gg.TYPE_DWORD, value = V}})
+    end
+
+    Q1z(B + IsCarOffRoad, -763363328)
+    Q1z(B + IsCarOffRoad + 0x4, -698416192)
+    Q1z(B + get_Penalty, -763363328)
+    Q1z(B + get_Penalty + 0x4, -698416192)
+    Q1z(B + get_MissedCheckpoints, -698416192)
+    Q1z(B + AddPenalty, -698416192)
+
+    gg.toast("✅ All penalties removed")
+end
+
+function T6m()  -- Teleport Patch
+    gg.setVisible(false)
+    gg.clearResults()
+    gg.setRanges(gg.REGION_ANONYMOUS)
+
+    gg.searchNumber("10", gg.TYPE_FLOAT)
+    local results = gg.getResults(2000)
+
+    local addr_refs = {}
+    local check_plus4 = {}
+    for _, r in ipairs(results) do
+        check_plus4[#check_plus4 + 1] = { address = r.address + 0x4, flags = gg.TYPE_FLOAT }
+        addr_refs[#addr_refs + 1] = r.address
+    end
+    local values_plus4 = gg.getValues(check_plus4)
+
+    local candidates = {}
+    local candidate_refs = {}
+    for i, v in ipairs(values_plus4) do
+        if v.value == 5 then
+            candidates[#candidates + 1] = { address = addr_refs[i] + 0x8, flags = gg.TYPE_FLOAT }
+            candidate_refs[#candidate_refs + 1] = addr_refs[i]
+        end
+    end
+
+    if #candidates == 0 then
+        gg.toast("Error: no candidates found (Teleport)")
+        return
+    end
+
+    local values_plus8 = gg.getValues(candidates)
+
+    local edits = {}
+    for i, v in ipairs(values_plus8) do
+        if v.value == 10 then
+            local addr24 = candidate_refs[i] + 0x24
+            local addr5C = candidate_refs[i] + 0x5C
+            S2k(addr24, gg.TYPE_DWORD)
+            S2k(addr5C, gg.TYPE_FLOAT)
+            edits[#edits + 1] = {
+                address = addr24,
+                flags = gg.TYPE_DWORD,
+                value = 360,
+                freeze = true
+            }
+            edits[#edits + 1] = {
+                address = addr5C,
+                flags = gg.TYPE_FLOAT,
+                value = 0,
+                freeze = true
+            }
+        end
+    end
+
+    if #edits == 0 then
+        gg.toast("Error: could not apply edits (Teleport)")
+        return
+    end
+
+    gg.addListItems(edits)
+    gg.clearResults()
+    gg.toast("🚀 Teleport Patch Active")
+    gg.setVisible(false)
+end
+
+-- Auto Win shared function (standard)
+function A3w(Q)
+    gg.setVisible(false)
+
+    gg.clearList()
+    gg.clearResults()
+    V7q = {}
+
+    gg.setRanges(gg.REGION_ANONYMOUS)
+    gg.searchNumber("10", gg.TYPE_FLOAT)
+    local results = gg.getResults(5000)
+
+    if #results == 0 then
+        gg.toast("Error: no results found")
+        return
+    end
+
+    local addr_refs = {}
+    local check_plus4 = {}
+    for _, r in ipairs(results) do
+        check_plus4[#check_plus4 + 1] = { address = r.address + 0x4, flags = gg.TYPE_FLOAT }
+        addr_refs[#addr_refs + 1] = r.address
+    end
+    local values_plus4 = gg.getValues(check_plus4)
+
+    local candidates = {}
+    local candidate_refs = {}
+    for i, v in ipairs(values_plus4) do
+        if v.value == 5 or v.value == 6 then
+            candidates[#candidates + 1] = { address = addr_refs[i] + 0x8, flags = gg.TYPE_FLOAT }
+            candidate_refs[#candidate_refs + 1] = addr_refs[i]
+        end
+    end
+
+    if #candidates == 0 then
+        gg.toast("Error: no candidates found (Auto Win)")
+        return
+    end
+
+    local values_plus8 = gg.getValues(candidates)
+
+    local edits = {}
+    for i, v in ipairs(values_plus8) do
+        if v.value == 10 or v.value == 11 then
+            local addr20 = candidate_refs[i] + 0x20
+            local addr24 = candidate_refs[i] + 0x24
+            local addr5C = candidate_refs[i] + 0x5C
+
+            S2k(addr20, gg.TYPE_DWORD)
+            S2k(addr24, gg.TYPE_DWORD)
+            S2k(addr5C, gg.TYPE_FLOAT)
+
+            edits[#edits + 1] = {address = addr20, flags = gg.TYPE_DWORD, value = 1, freeze = true}
+            edits[#edits + 1] = {address = addr24, flags = gg.TYPE_DWORD, value = 360, freeze = true}
+            edits[#edits + 1] = {address = addr5C, flags = gg.TYPE_FLOAT, value = 0.001, freeze = true}
+        end
+    end
+
+    if #edits == 0 then
+        gg.toast("Error: could not apply edits (Auto Win)")
+        return
+    end
+
+    gg.addListItems(edits)
+    gg.clearResults()
+    gg.setVisible(false)
+
+    -- Second stage (standard)
+    gg.setRanges(gg.REGION_ANONYMOUS)
+    gg.searchNumber(tostring(Q), gg.TYPE_QWORD)
+    local r = gg.getResults(200000)
+
+    if #r > 0 then
+        local t1 = {}
+        local t1Refs = {}
+        for _, v in ipairs(r) do
+            t1[#t1+1] = { address = v.address + 0x40, flags = gg.TYPE_DWORD }
+            t1Refs[#t1Refs+1] = v.address
+        end
+        t1 = gg.getValues(t1)
+
+        local t2 = {}
+        local t2Refs = {}
+        for i, v in ipairs(t1) do
+            if v.value >= 1 and v.value <= 60 then
+                t2[#t2+1] = { address = t1Refs[i] - 0xC4, flags = gg.TYPE_DWORD }
+                t2Refs[#t2Refs+1] = t1Refs[i]
+            end
+        end
+
+        if #t2 > 0 then
+            t2 = gg.getValues(t2)
+            local t3 = {}
+            local t3Refs = {}
+            for i, v in ipairs(t2) do
+                if v.value == 0 then
+                    t3[#t3+1] = { address = t2Refs[i] - 0xCC, flags = gg.TYPE_QWORD }
+                    t3Refs[#t3Refs+1] = t2Refs[i]
+                end
+            end
+
+            if #t3 > 0 then
+                t3 = gg.getValues(t3)
+                local t4 = {}
+                local t4Refs = {}
+                for i, v in ipairs(t3) do
+                    if v.value == 4294967296 then
+                        t4[#t4+1] = { address = t3Refs[i] - 0xC8, flags = gg.TYPE_DWORD }
+                        t4Refs[#t4Refs+1] = t3Refs[i]
+                    end
+                end
+
+                if #t4 > 0 then
+                    t4 = gg.getValues(t4)
+                    local e = {}
+                    for i, v in ipairs(t4) do
+                        if v.value == 1 then
+                            local addrC8 = t4Refs[i] - 0xC8
+                            S2k(addrC8, gg.TYPE_DWORD)
+                            e[#e+1] = {address = addrC8, flags = gg.TYPE_DWORD, value = 3, freeze = true}
+                        end
+                    end
+                    if #e > 0 then
+                        gg.addListItems(e)
+                    end
+                end
+            end
+        end
+    end
+
+    gg.clearResults()
+    P8r()
+    gg.toast("🏆 Auto Win Active! Hit the opponent and the race will end.")
+end
+
+-- Auto Win variants
+function R9d() A3w(15) end  -- Road
+function J5p() A3w(10) end  -- Japan
+function I7t() A3w(14) end  -- Italy
+
+-- === NEW MENU OPTION: 19min Issue ===
+function N2s()
+    gg.setVisible(false)
+    gg.clearList()
+    gg.clearResults()
+    V7q = {}
+
+    gg.setRanges(gg.REGION_ANONYMOUS)
+    gg.searchNumber("10", gg.TYPE_FLOAT)
+    local results = gg.getResults(10000)  -- enough results
+
+    if #results == 0 then
+        gg.toast("Error: no results found (19min Issue)")
+        return
+    end
+
+    local addr_refs = {}
+    local check_plus4 = {}
+    for _, r in ipairs(results) do
+        check_plus4[#check_plus4 + 1] = { address = r.address + 0x4, flags = gg.TYPE_FLOAT }
+        addr_refs[#addr_refs + 1] = r.address
+    end
+    local values_plus4 = gg.getValues(check_plus4)
+
+    local candidates = {}
+    local candidate_refs = {}
+    for i, v in ipairs(values_plus4) do
+        if v.value == 5 or v.value == 6 then
+            candidates[#candidates + 1] = { address = addr_refs[i] + 0x8, flags = gg.TYPE_FLOAT }
+            candidate_refs[#candidate_refs + 1] = addr_refs[i]
+        end
+    end
+
+    if #candidates == 0 then
+        gg.toast("Error: no candidates found (19min Issue)")
+        return
+    end
+
+    local values_plus8 = gg.getValues(candidates)
+
+    local edits = {}
+    for i, v in ipairs(values_plus8) do
+        if v.value == 10 or v.value == 11 then
+            local addr20 = candidate_refs[i] + 0x20
+            local addr24 = candidate_refs[i] + 0x24
+            local addr5C = candidate_refs[i] + 0x5C
+
+            S2k(addr20, gg.TYPE_DWORD)
+            S2k(addr24, gg.TYPE_DWORD)
+            S2k(addr5C, gg.TYPE_FLOAT)
+
+            -- Reasonable checkpoint values: 1000 (not too high, not too low)
+            edits[#edits+1] = {address = addr20, flags = gg.TYPE_DWORD, value = 1000, freeze = true}
+            edits[#edits+1] = {address = addr24, flags = gg.TYPE_DWORD, value = 1000, freeze = true}
+            edits[#edits+1] = {address = addr5C, flags = gg.TYPE_FLOAT, value = 0.001, freeze = true}
+        end
+    end
+
+    if #edits == 0 then
+        gg.toast("Error: could not apply edits (19min Issue)")
+        return
+    end
+
+    gg.addListItems(edits)
+    gg.clearResults()
+    gg.setVisible(false)
+
+    -- Second stage: assuming search parameter 14 (Italy)
+    gg.setRanges(gg.REGION_ANONYMOUS)
+    gg.searchNumber("14", gg.TYPE_QWORD)
+    local r = gg.getResults(200000)
+
+    if #r > 0 then
+        local t1 = {}
+        local t1Refs = {}
+        for _, v in ipairs(r) do
+            t1[#t1+1] = { address = v.address + 0x40, flags = gg.TYPE_DWORD }
+            t1Refs[#t1Refs+1] = v.address
+        end
+        t1 = gg.getValues(t1)
+
+        local t2 = {}
+        local t2Refs = {}
+        for i, v in ipairs(t1) do
+            if v.value >= 1 and v.value <= 180 then
+                t2[#t2+1] = { address = t1Refs[i] - 0xC4, flags = gg.TYPE_DWORD }
+                t2Refs[#t2Refs+1] = t1Refs[i]
+            end
+        end
+
+        if #t2 > 0 then
+            t2 = gg.getValues(t2)
+            local t3 = {}
+            local t3Refs = {}
+            for i, v in ipairs(t2) do
+                if v.value == 0 then
+                    t3[#t3+1] = { address = t2Refs[i] - 0xCC, flags = gg.TYPE_QWORD }
+                    t3Refs[#t3Refs+1] = t2Refs[i]
+                end
+            end
+
+            if #t3 > 0 then
+                t3 = gg.getValues(t3)
+                local t4 = {}
+                local t4Refs = {}
+                for i, v in ipairs(t3) do
+                    if v.value == 4294967296 then
+                        t4[#t4+1] = { address = t3Refs[i] - 0xC8, flags = gg.TYPE_DWORD }
+                        t4Refs[#t4Refs+1] = t3Refs[i]
+                    end
+                end
+
+                if #t4 > 0 then
+                    t4 = gg.getValues(t4)
+                    local e = {}
+                    for i, v in ipairs(t4) do
+                        if v.value == 1 then
+                            local addrC8 = t4Refs[i] - 0xC8
+                            S2k(addrC8, gg.TYPE_DWORD)
+                            e[#e+1] = {address = addrC8, flags = gg.TYPE_DWORD, value = 7, freeze = true}
+                        end
+                    end
+                    if #e > 0 then
+                        gg.addListItems(e)
+                    end
+                end
+            end
+        end
+    end
+
+    gg.clearResults()
+    P8r()
+    gg.toast("🧩 19min Issue Active! Checkpoints bypassed, hit the opponent and the race will end.")
+end
+
+
+
+
+
+
+function BypassReward()
+
+-- RallyController 0x30
+--private RallyState _rallyState; // 0x28
+classValue("RallyController", 0x28, gg.TYPE_DWORD)
+gg.refineNumber('1~4', gg.TYPE_DWORD)
+
+local r = gg.getResults(500)
+local e = {}
+
+for _,v in ipairs(r) do
+    e[#e+1] = {
+        address = v.address,
+        flags = gg.TYPE_DWORD,
+        value = 3,
+        freeze = true
+    }
+end
+
+gg.addListItems(e)
+gg.clearResults()
+gg.setVisible(false)
+Removpenal()
+gg.toast('Bypass On ')
+end
+
+
+
+
+-- Clear list
+function C4l()
+    gg.clearList()
+    gg.clearResults()
+    V7q = {}
+    gg.toast("🧹 List and results cleared")
+end
+
+-- Restore all hacks
+function Z8r()
+    if next(V7q) == nil then
+        gg.toast("No changes to restore.")
+        return
+    end
+
+    local restoreItems = {}
+    for addr, data in pairs(V7q) do
+        restoreItems[#restoreItems + 1] = {
+            address = addr,
+            flags = data.flags,
+            value = data.value
+        }
+    end
+
+    gg.setValues(restoreItems)
+    gg.clearList()
+    gg.clearResults()
+    V7q = {}
+    gg.toast("🔄 All hacks restored to original values.")
+end
+
+-- ---------- Main Rally Menu ----------
+function M6u()
+    local options = {
+        "⏱️ Hook Time",
+        "🚫 Hook All Penalties",
+        "📡 Teleport Patch",
+        "🏆 Auto Win [Road]",
+        "🏆 Auto Win [Japan]",
+        "🏆 Auto Win [Italy]",
+        "🧩 19min Issue",
+        "🧩 Bypass Reward",        
+        "🧹 Clear List",
+        "🔄 Restore All Hacks",
+        "exit"
+    }
+    local choice = gg.choice(options, nil, title)
+    if choice == nil then
+        return
+    end
+
+    if choice == 1 then F4n()
+    elseif choice == 2 then P8r()
+    elseif choice == 3 then T6m()
+    elseif choice == 4 then R9d()
+    elseif choice == 5 then J5p()
+    elseif choice == 6 then I7t()
+    elseif choice == 7 then BypassReward()
+    elseif choice == 8 then N2s()
+    elseif choice == 9 then C4l()
+    elseif choice == 10 then Z8r()
+    elseif choice == 11 then os.exit()
+    end
+end
+
+-- ---------- Main loop ----------
+local W0k = true
+while W0k do
+    if gg.isVisible(true) then
+        gg.setVisible(false)
+        M6u()
+    end
+    gg.sleep(100)
+end
+
